@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="header">
+      <h1>Site Limiter</h1>
+      <span class="total">Today: <span id="total-time">0m</span></span>
+    </div>
+
+    <div id="site-list" class="site-list"></div>
+
+    <div id="empty-state" class="empty-state hidden">
+      No sites tracked yet. Add one below.
+    </div>
+
+    <div class="add-section">
+      <button id="toggle-add" class="btn-toggle">+ Add Site</button>
+      <div id="add-form" class="add-form hidden">
+        <input
+          id="domain-input"
+          type="text"
+          placeholder="e.g. twitter.com"
+          spellcheck="false"
+        />
+        <div class="limit-row">
+          <input id="limit-input" type="number" value="30" min="1" max="1440" />
+          <span>minutes / day</span>
+        </div>
+        <button id="add-btn" class="btn-confirm">Add Site</button>
+      </div>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

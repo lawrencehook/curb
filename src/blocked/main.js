@@ -16,11 +16,6 @@ qs('#domain').textContent = domain;
 qs('#spent').textContent = fmt(spent);
 qs('#limit').textContent = fmt(limit);
 
-// Go back
-qs('#close-btn').addEventListener('click', () => {
-  history.back();
-});
-
 // Extend time
 const extendBtn = qs('#extend-btn');
 const remainingSpan = qs('#remaining');

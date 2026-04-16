@@ -78,7 +78,7 @@ function buildCards(list) {
           <label class="limit-edit">
             Limit:
             <input type="number" class="limit-input" data-domain="${esc(site.domain)}"
-                   value="${site.daily_limit_minutes}" min="1" max="1440">
+                   value="${site.daily_limit_minutes}" min="0" max="1440">
             min/day
           </label>
           <button class="btn-remove" data-domain="${esc(site.domain)}">Remove</button>
@@ -153,7 +153,7 @@ async function removeSite(domain) {
 }
 
 async function updateLimit(domain, minutes) {
-  if (isNaN(minutes) || minutes < 1) return;
+  if (isNaN(minutes) || minutes < 0) return;
   const site = state.sites.find((s) => s.domain === domain);
   if (!site) return;
   site.daily_limit_minutes = minutes;

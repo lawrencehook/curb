@@ -1,0 +1,25 @@
+{
+  "manifest_version": 2,
+  "name": "Curfew",
+  "version": "0.0.1",
+  "description": "Set daily time limits for distracting websites",
+  "permissions": [
+    "tabs",
+    "storage"
+  ],
+  "background": {
+    "scripts": ["background/main.js"]
+  },
+  "browser_action": {
+    "default_popup": "popup/main.html",
+    "default_icon": "icons/icon.svg",
+    "default_title": "Curfew"
+  },
+  "icons": {
+    "48": "icons/icon.svg",
+    "96": "icons/icon.svg"
+  },
+  "web_accessible_resources": [
+    "blocked/main.html"
+  ]
+}

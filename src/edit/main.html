@@ -3,81 +3,166 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Edit Site — Curb</title>
+    <title>Edit — Curb</title>
     <link rel="stylesheet" type="text/css" href="main.css">
     <script defer src="/shared/utils.js"></script>
     <script defer src="main.js"></script>
   </head>
   <body>
     <div class="app">
-      <header class="topbar">
-        <div class="brand">
-          <svg class="logo" viewBox="0 0 48 48" width="20" height="20">
-            <rect x="10" y="2" width="28" height="4" rx="1.5" fill="rgba(255,255,255,0.6)"/>
-            <rect x="10" y="42" width="28" height="4" rx="1.5" fill="rgba(255,255,255,0.6)"/>
-            <path d="M14 6 L14 10 C14 18 20 22 24 24 C20 26 14 30 14 38 L14 42 L34 42 L34 38 C34 30 28 26 24 24 C28 22 34 18 34 10 L34 6 Z" fill="rgba(255,255,255,0.8)"/>
-            <path d="M18 38 C18 32 22 29 24 27 C26 29 30 32 30 38 Z" fill="#c9a84e"/>
-            <path d="M17 8 C17 14 21 18 24 20 C27 18 31 14 31 8 Z" fill="rgba(255,255,255,0.35)"/>
-          </svg>
-          <span class="brand-name">Curb</span>
-        </div>
-        <h1 id="domain" class="topbar-domain">—</h1>
-      </header>
-
       <div class="layout">
         <aside class="sidebar">
-          <div class="sidebar-title">Your sites</div>
-          <nav id="sidebar-sites" class="sidebar-sites"></nav>
+          <div class="brand">
+            <svg class="logo" viewBox="0 0 48 48" width="20" height="20">
+              <rect x="10" y="2" width="28" height="4" rx="1.5" fill="rgba(255,255,255,0.6)"/>
+              <rect x="10" y="42" width="28" height="4" rx="1.5" fill="rgba(255,255,255,0.6)"/>
+              <path d="M14 6 L14 10 C14 18 20 22 24 24 C20 26 14 30 14 38 L14 42 L34 42 L34 38 C34 30 28 26 24 24 C28 22 34 18 34 10 L34 6 Z" fill="rgba(255,255,255,0.8)"/>
+              <path d="M18 38 C18 32 22 29 24 27 C26 29 30 32 30 38 Z" fill="#c9a84e"/>
+              <path d="M17 8 C17 14 21 18 24 20 C27 18 31 14 31 8 Z" fill="rgba(255,255,255,0.35)"/>
+            </svg>
+            <span class="brand-name">Curb</span>
+          </div>
+
+          <div class="sidebar-section">
+            <div class="sidebar-title">
+              Policies
+              <button id="sidebar-add-policy" class="sidebar-add" title="New policy">+</button>
+            </div>
+            <nav id="sidebar-policies" class="sidebar-list"></nav>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-title">Sites</div>
+            <nav id="sidebar-sites" class="sidebar-list"></nav>
+          </div>
+
+          <div class="sidebar-footer">
+            <a id="settings-link" href="main.html?view=settings" class="sidebar-footer-link">Settings</a>
+          </div>
         </aside>
 
         <main class="content">
-          <div id="content" class="hidden">
-            <nav class="tabs" id="tabs">
-              <button class="tab active" data-tab="limits">Limits</button>
+          <!-- ── Site view ─────────────────────────────────────── -->
+          <div id="site-view" class="hidden">
+            <nav class="tabs" id="site-tabs">
+              <button class="tab active" data-tab="policies">Policies</button>
               <button class="tab" data-tab="history">History</button>
             </nav>
 
-            <div id="limits-panel" class="tab-panel active">
+            <div id="site-policies-panel" class="tab-panel active">
               <section class="card">
                 <div class="section-head">
-                  <h2>Limits</h2>
-                  <div class="add-limit">
-                    <select id="limit-type">
-                      <option value="daily">Daily cap</option>
-                      <option value="bucket">Rate (leaky bucket)</option>
-                    </select>
-                    <button id="add-limit-btn" class="btn btn-primary">Add limit</button>
-                  </div>
+                  <h2>Policies covering this site</h2>
+                  <button id="site-add-policy-btn" class="btn btn-primary">New policy</button>
                 </div>
-                <div id="limits-list"></div>
-              </section>
-
-              <section class="card coming-soon">
-                <div class="section-head">
-                  <h2>Access gates</h2>
-                  <span class="badge">coming soon</span>
-                </div>
-                <ul class="gate-placeholder">
-                  <li>Password prompt</li>
-                  <li>Friction delay (wait N seconds)</li>
-                  <li>Typing challenge</li>
-                </ul>
+                <div id="site-policies-list"></div>
               </section>
 
               <div class="footer-actions">
-                <button id="remove-btn" class="btn btn-ghost">Remove site</button>
+                <button id="remove-site-btn" class="btn btn-ghost">Stop tracking this site</button>
               </div>
             </div>
 
-            <div id="history-panel" class="tab-panel"></div>
+            <div id="site-history-panel" class="tab-panel"></div>
           </div>
 
-          <div id="not-found" class="hidden empty">
-            Site not found. Pick one from the sidebar.
+          <!-- ── Policy view ───────────────────────────────────── -->
+          <div id="policy-view" class="hidden">
+            <section class="card">
+              <div class="policy-name-row">
+                <label for="policy-name-input" class="field-label">Name</label>
+                <input id="policy-name-input" class="policy-name-input" type="text" maxlength="80" spellcheck="false">
+              </div>
+            </section>
+
+            <section class="card">
+              <div class="section-head">
+                <h2>Rules</h2>
+                <div class="add-limit">
+                  <select id="add-rule-type">
+                    <option value="daily">Daily cap</option>
+                    <option value="bucket">Rate (leaky bucket)</option>
+                  </select>
+                  <button id="add-rule-btn" class="btn btn-primary">Add rule</button>
+                </div>
+              </div>
+              <p class="hint">
+                Each rule independently blocks the policy's domains. The tightest rule wins.
+                Stack daily caps with bursty buckets for nuanced shape.
+              </p>
+              <div id="rules-list"></div>
+            </section>
+
+            <section class="card">
+              <div class="section-head">
+                <h2>Domains</h2>
+                <span class="badge" id="policy-domain-count">0</span>
+              </div>
+              <p class="hint">
+                Pick which domains this policy applies to. Time spent on any of them counts toward the policy's shared pool.
+              </p>
+              <div id="policy-domains" class="domain-list"></div>
+            </section>
+
+            <section class="card coming-soon">
+              <div class="section-head">
+                <h2>Access gates</h2>
+                <span class="badge">coming soon</span>
+              </div>
+              <ul class="gate-placeholder">
+                <li>Password prompt</li>
+                <li>Friction delay (wait N seconds)</li>
+                <li>Typing challenge</li>
+              </ul>
+            </section>
+
+            <div class="footer-actions">
+              <button id="remove-policy-btn" class="btn btn-ghost">Remove policy</button>
+            </div>
+          </div>
+
+          <!-- ── Settings view ─────────────────────────────────── -->
+          <div id="settings-view" class="hidden">
+            <section class="card">
+              <div class="section-head">
+                <h2>Export</h2>
+              </div>
+              <p class="hint">
+                Download a JSON file containing all policies. Useful for backup or moving to another device.
+              </p>
+              <button id="export-btn" class="btn btn-primary">Export policies</button>
+            </section>
+
+            <section class="card">
+              <div class="section-head">
+                <h2>Import</h2>
+              </div>
+              <p class="hint">
+                Load policies from a previously exported file. <strong>Replaces</strong> all current policies.
+              </p>
+              <input id="import-file" type="file" accept="application/json,.json" class="hidden">
+              <button id="import-btn" class="btn btn-primary">Choose file…</button>
+            </section>
+
+            <section class="card coming-soon">
+              <div class="section-head">
+                <h2>Sync</h2>
+                <span class="badge">coming soon</span>
+              </div>
+              <ul class="gate-placeholder">
+                <li>Sign in to sync policies across devices</li>
+              </ul>
+            </section>
+          </div>
+
+          <!-- ── Empty / fallback ──────────────────────────────── -->
+          <div id="empty-view" class="hidden empty">
+            No policies yet. Click <strong>+</strong> next to "Policies" in the sidebar to create one.
           </div>
         </main>
       </div>
     </div>
+
+    <div id="history-tooltip" class="history-tooltip hidden"></div>
 
     <div id="modal-backdrop" class="modal-backdrop hidden">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">

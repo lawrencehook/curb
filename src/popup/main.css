@@ -32,89 +32,137 @@ body {
 .header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 9px;
   padding: 11px 14px;
   background: var(--primary);
   color: #fff;
 }
 
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.logo {
+.header .logo {
   flex-shrink: 0;
   opacity: 0.95;
 }
 
-.header h1 {
-  font-size: 14px;
+.site-name {
+  flex: 1;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.3px;
-}
-
-.total {
-  font-size: 11px;
-  opacity: 0.8;
-  font-weight: 500;
-}
-
-/* ── Site list ──────────────────────────────────────────── */
-.site-list {
-  padding: 8px;
-  max-height: 360px;
-  overflow-y: auto;
-}
-
-/* ── Site card ──────────────────────────────────────────── */
-.site-card {
-  background: var(--surface);
-  border-radius: 6px;
-  padding: 9px 12px;
-  margin-bottom: 5px;
-  box-shadow: 0 1px 3px var(--shadow);
-  border-left: 3px solid var(--border);
-  cursor: pointer;
-  transition: border-color 0.3s ease;
-}
-
-.site-card:hover {
-  box-shadow: 0 1px 5px rgba(59, 53, 68, 0.1);
-}
-
-.site-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-}
-
-.site-domain {
-  font-weight: 600;
-  font-size: 12.5px;
-  color: var(--text);
+  letter-spacing: 0.1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .site-time {
   font-size: 11px;
-  color: var(--text-secondary);
+  opacity: 0.85;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Policy list ────────────────────────────────────────── */
+.policy-list {
+  padding: 8px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.policy-card {
+  background: var(--surface);
+  border-radius: 6px;
+  padding: 9px 12px;
+  margin-bottom: 6px;
+  box-shadow: 0 1px 3px var(--shadow);
+  border-left: 3px solid var(--border);
+  cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.3s ease;
+}
+
+.policy-card:hover {
+  box-shadow: 0 1px 5px rgba(59, 53, 68, 0.1);
+}
+
+.policy-card.active {
+  box-shadow: 0 0 0 1px var(--primary-subtle), 0 1px 3px var(--shadow);
+}
+
+.policy-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.policy-name {
+  font-weight: 600;
+  font-size: 12.5px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* ── Progress ───────────────────────────────────────────── */
-.progress-track {
+.policy-meta {
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Rule rows ──────────────────────────────────────────── */
+.rule-row {
+  margin-top: 5px;
+}
+
+.rule-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
+.rule-kind {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rule-stat {
+  font-size: 11px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.rule-track {
   height: 4px;
   background: var(--border);
   border-radius: 2px;
   overflow: hidden;
 }
 
-.progress-fill {
+.rule-fill {
   height: 100%;
+  width: 0%;
   border-radius: 2px;
   transition: width 0.4s ease, background 0.4s ease;
+}
+
+.rule-empty {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-style: italic;
 }
 
 /* ── Empty state ────────────────────────────────────────── */
@@ -126,104 +174,28 @@ body {
   line-height: 1.6;
 }
 
-/* ── Add section ────────────────────────────────────────── */
-.add-section {
-  padding: 8px;
+/* ── Footer section ─────────────────────────────────────── */
+.footer-section {
+  padding: 10px;
   border-top: 1px solid var(--border);
 }
 
-.btn-toggle {
+.btn-manage {
   display: block;
   width: 100%;
-  padding: 7px;
-  background: none;
-  border: 1.5px dashed var(--border-strong);
-  border-radius: 6px;
-  color: var(--primary);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-}
-
-.btn-toggle:hover {
-  border-color: var(--primary);
-  background: var(--primary-subtle);
-}
-
-.add-form {
-  margin-top: 8px;
-  padding: 10px;
-  background: var(--surface);
-  border-radius: 6px;
-  box-shadow: 0 1px 3px var(--shadow);
-}
-
-.add-form input[type="text"] {
-  width: 100%;
-  padding: 7px 9px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  font-size: 12.5px;
-  margin-bottom: 8px;
-  color: var(--text);
-  background: var(--bg);
-  transition: border-color 0.15s;
-}
-
-.add-form input[type="text"]:focus {
-  outline: none;
-  border-color: var(--primary);
-}
-
-.add-form input[type="text"]::placeholder {
-  color: var(--text-tertiary);
-}
-
-.limit-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-
-.limit-row input {
-  width: 56px;
-  padding: 5px 7px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  font-size: 12.5px;
-  text-align: center;
-  color: var(--text);
-  background: var(--bg);
-  transition: border-color 0.15s;
-}
-
-.limit-row input:focus {
-  outline: none;
-  border-color: var(--primary);
-}
-
-.limit-row span {
-  color: var(--text-secondary);
-  font-size: 11.5px;
-}
-
-.btn-add {
-  display: block;
-  width: 100%;
-  padding: 7px;
+  padding: 8px;
   background: var(--primary);
   color: #fff;
   border: none;
-  border-radius: 5px;
+  border-radius: 6px;
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s;
+  font-family: inherit;
 }
 
-.btn-add:hover {
+.btn-manage:hover {
   background: var(--primary-hover);
 }
 

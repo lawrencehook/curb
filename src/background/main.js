@@ -15,15 +15,23 @@ if (browser && !browser.browserAction && browser.action) {
 const FLUSH_INTERVAL = 10000;
 const EXTENSION_BONUS = 60;
 const MAX_EXTENSIONS = 1;
-const DEFAULT_SITES = [];
 
 /***************
  * State
+ *
+ * policies: [{id, name, domains: [string], rules: [Rule]}]
+ *   Rule: {id, type: 'daily',  minutes}
+ *       | {id, type: 'bucket', capacityMin, windowMin}
+ * usage:    {[date]: {[domain]: seconds}}
+ * buckets:  {[ruleId]: {tokens, lastRefillMs, cap}}
+ * ext_<date>_<ruleId>: number
+ *
+ * Tracked domains are the union of all policy.domains — sites are not stored.
  ***************/
 
-let sites = [];
+let policies = [];
 let usage = {};
-let buckets = {}; // `${domain}:${limitIdx}` → {tokens, lastRefillMs, cap}
+let buckets = {};
 let dateKey = getDateKey();
 let activeTabId = null;
 let trackedDomain = null;
@@ -44,6 +52,11 @@ function getDateKey() {
   ].join('-');
 }
 
+function newId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  return 'r_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+}
+
 function hostname(url) {
   try {
     return new URL(url).hostname;
@@ -52,10 +65,29 @@ function hostname(url) {
   }
 }
 
-function findSite(host) {
+function trackedDomainsSet() {
+  const set = new Set();
+  for (const p of policies) for (const d of p.domains) set.add(d);
+  return set;
+}
+
+function matchTrackedDomain(host) {
   if (!host) return null;
-  for (const s of sites) {
-    if (host === s.domain || host.endsWith('.' + s.domain)) return s;
+  const set = trackedDomainsSet();
+  if (set.has(host)) return host;
+  for (const d of set) {
+    if (host.endsWith('.' + d)) return d;
+  }
+  return null;
+}
+
+function policiesForDomain(domain) {
+  return policies.filter((p) => p.domains.includes(domain));
+}
+
+function findRule(ruleId) {
+  for (const p of policies) {
+    for (const r of p.rules) if (r.id === ruleId) return { policy: p, rule: r };
   }
   return null;
 }
@@ -75,19 +107,78 @@ function badgeColor(ratio) {
 
 /***************
  * Migration
+ *
+ * Old shapes:
+ *   limits = [{id, type, ...config, domains}]            (multi-domain limits)
+ *   sites  = [{domain, limits: [...]}]                   (per-site limits)
+ *   sites  = [{domain, daily_limit_minutes}]             (oldest)
+ *
+ * New shape: policies = [{id, name, domains, rules}].
+ * Bucket state and ext_ keys are keyed by rule.id — preserve incoming ids
+ * so existing fill levels and today's extension counts survive the upgrade.
  ***************/
 
-function migrateSites(raw) {
-  return raw.map((s) => {
-    if (Array.isArray(s.limits)) return s;
-    if (typeof s.daily_limit_minutes === 'number') {
-      return {
-        domain: s.domain,
-        limits: [{ type: 'daily', minutes: s.daily_limit_minutes }],
-      };
+function migrate(rawSites, rawLimits, rawPolicies) {
+  if (Array.isArray(rawPolicies)) {
+    return { policies: rawPolicies, changed: false };
+  }
+
+  const out = [];
+  let n = 0;
+
+  if (Array.isArray(rawLimits)) {
+    for (const lim of rawLimits) {
+      n++;
+      let rule;
+      if (lim.type === 'daily') {
+        rule = { id: lim.id || newId(), type: 'daily', minutes: lim.minutes };
+      } else if (lim.type === 'bucket') {
+        rule = {
+          id: lim.id || newId(),
+          type: 'bucket',
+          capacityMin: lim.capacityMin,
+          windowMin: lim.windowMin,
+        };
+      } else continue;
+      out.push({
+        id: newId(),
+        name: `Policy ${n}`,
+        domains: (lim.domains || []).slice(),
+        rules: [rule],
+      });
     }
-    return { domain: s.domain, limits: [] };
-  });
+    return { policies: out, changed: true };
+  }
+
+  for (const s of rawSites || []) {
+    const inline = Array.isArray(s.limits)
+      ? s.limits
+      : typeof s.daily_limit_minutes === 'number'
+        ? [{ type: 'daily', minutes: s.daily_limit_minutes }]
+        : [];
+    for (const l of inline) {
+      n++;
+      let rule;
+      if (l.type === 'daily') {
+        rule = { id: newId(), type: 'daily', minutes: l.minutes };
+      } else if (l.type === 'bucket') {
+        rule = {
+          id: newId(),
+          type: 'bucket',
+          capacityMin: l.capacityMin,
+          windowMin: l.windowMin,
+        };
+      } else continue;
+      out.push({
+        id: newId(),
+        name: `Policy ${n}`,
+        domains: [s.domain],
+        rules: [rule],
+      });
+    }
+  }
+
+  return { policies: out, changed: true };
 }
 
 /***************
@@ -95,17 +186,26 @@ function migrateSites(raw) {
  ***************/
 
 async function load() {
-  const data = await browser.storage.local.get(['sites', 'usage', 'buckets']);
-  const raw = data.sites || DEFAULT_SITES.slice();
-  sites = migrateSites(raw);
-  const migrated = JSON.stringify(sites) !== JSON.stringify(raw);
+  const data = await browser.storage.local.get([
+    'sites',
+    'limits',
+    'policies',
+    'usage',
+    'buckets',
+  ]);
+  const m = migrate(data.sites, data.limits, data.policies);
+  policies = m.policies;
 
   const allUsage = data.usage || {};
   usage = allUsage[dateKey] || {};
   buckets = data.buckets || {};
 
-  if (migrated || !data.sites) {
-    await browser.storage.local.set({ sites });
+  if (m.changed) {
+    await browser.storage.local.set({ policies });
+    const stale = [];
+    if (data.sites !== undefined) stale.push('sites');
+    if (data.limits !== undefined) stale.push('limits');
+    if (stale.length) await browser.storage.local.remove(stale);
   }
 
   pruneExtKeys();
@@ -122,9 +222,9 @@ async function pruneExtKeys() {
 
 function pruneBuckets() {
   const valid = new Set();
-  for (const s of sites) {
-    for (let i = 0; i < s.limits.length; i++) {
-      if (s.limits[i].type === 'bucket') valid.add(bucketKey(s.domain, i));
+  for (const p of policies) {
+    for (const r of p.rules) {
+      if (r.type === 'bucket') valid.add(r.id);
     }
   }
   for (const k of Object.keys(buckets)) {
@@ -148,8 +248,8 @@ async function flush() {
  * Extensions (bonus time)
  ***************/
 
-async function getExtensionCount(domain) {
-  const key = `ext_${dateKey}_${domain}`;
+async function getExtensionCount(ruleId) {
+  const key = `ext_${dateKey}_${ruleId}`;
   const data = await browser.storage.local.get(key);
   return data[key] || 0;
 }
@@ -158,20 +258,15 @@ async function getExtensionCount(domain) {
  * Bucket state
  ***************/
 
-function bucketKey(domain, idx) {
-  return domain + ':' + idx;
-}
-
-function refillBucket(domain, idx, lim) {
-  const key = bucketKey(domain, idx);
-  const cap = lim.capacityMin * 60;
-  const windowSec = lim.windowMin * 60;
+function refillBucket(rule) {
+  const cap = rule.capacityMin * 60;
+  const windowSec = rule.windowMin * 60;
   const rate = windowSec > 0 ? cap / windowSec : 0;
   const now = Date.now();
-  let state = buckets[key];
+  let state = buckets[rule.id];
   if (!state || state.cap !== cap) {
     state = { tokens: cap, lastRefillMs: now, cap };
-    buckets[key] = state;
+    buckets[rule.id] = state;
     bucketsDirty = true;
     return state;
   }
@@ -184,47 +279,62 @@ function refillBucket(domain, idx, lim) {
   return state;
 }
 
-function drainBucket(domain, idx, lim) {
-  const state = refillBucket(domain, idx, lim);
+function drainBucket(rule) {
+  const state = refillBucket(rule);
   state.tokens = Math.max(0, state.tokens - 1);
   bucketsDirty = true;
   return state;
 }
 
 /***************
- * Limit evaluation
+ * Rule evaluation
  ***************/
 
-async function evalLimits(site, domain) {
-  const ext = await getExtensionCount(domain);
-  const results = [];
-  for (let i = 0; i < site.limits.length; i++) {
-    const lim = site.limits[i];
-    if (lim.type === 'daily') {
-      const sec = usage[domain] || 0;
-      const limitSec = lim.minutes * 60 + ext * EXTENSION_BONUS;
-      results.push({
-        idx: i,
-        type: 'daily',
-        blocked: limitSec > 0 && sec >= limitSec,
-        progress: limitSec > 0 ? sec / limitSec : 1,
-        current: sec,
-        limit: limitSec,
-      });
-    } else if (lim.type === 'bucket') {
-      const state = refillBucket(domain, i, lim);
-      const cap = lim.capacityMin * 60;
-      results.push({
-        idx: i,
-        type: 'bucket',
-        blocked: cap > 0 && state.tokens <= 0,
-        progress: cap > 0 ? 1 - state.tokens / cap : 1,
-        current: cap - state.tokens,
-        limit: cap,
-      });
+async function evalRule(policy, rule) {
+  if (rule.type === 'daily') {
+    let sec = 0;
+    for (const d of policy.domains) sec += usage[d] || 0;
+    const ext = await getExtensionCount(rule.id);
+    const limitSec = rule.minutes * 60 + ext * EXTENSION_BONUS;
+    return {
+      policyId: policy.id,
+      policyName: policy.name,
+      ruleId: rule.id,
+      type: 'daily',
+      blocked: limitSec > 0 && sec >= limitSec,
+      progress: limitSec > 0 ? sec / limitSec : 1,
+      current: sec,
+      limit: limitSec,
+      domains: policy.domains.slice(),
+    };
+  }
+  if (rule.type === 'bucket') {
+    const state = refillBucket(rule);
+    const cap = rule.capacityMin * 60;
+    return {
+      policyId: policy.id,
+      policyName: policy.name,
+      ruleId: rule.id,
+      type: 'bucket',
+      blocked: cap > 0 && state.tokens <= 0,
+      progress: cap > 0 ? 1 - state.tokens / cap : 1,
+      current: cap - state.tokens,
+      limit: cap,
+      domains: policy.domains.slice(),
+    };
+  }
+  return null;
+}
+
+async function evalDomainRules(domain) {
+  const out = [];
+  for (const p of policiesForDomain(domain)) {
+    for (const r of p.rules) {
+      const e = await evalRule(p, r);
+      if (e) out.push(e);
     }
   }
-  return results;
+  return out;
 }
 
 function tightestProgress(results) {
@@ -249,17 +359,14 @@ async function tick() {
   usage[trackedDomain] = (usage[trackedDomain] || 0) + 1;
   dirty = true;
 
-  const site = findSite(trackedDomain);
-  if (!site) return;
-
-  // Drain bucket limits
-  for (let i = 0; i < site.limits.length; i++) {
-    if (site.limits[i].type === 'bucket') {
-      drainBucket(trackedDomain, i, site.limits[i]);
+  const applicable = policiesForDomain(trackedDomain);
+  for (const p of applicable) {
+    for (const r of p.rules) {
+      if (r.type === 'bucket') drainBucket(r);
     }
   }
 
-  const results = await evalLimits(site, trackedDomain);
+  const results = await evalDomainRules(trackedDomain);
   const sec = usage[trackedDomain];
   browser.browserAction.setBadgeText({ text: badgeText(sec) });
   browser.browserAction.setBadgeBackgroundColor({
@@ -267,9 +374,7 @@ async function tick() {
   });
 
   const blocked = results.find((r) => r.blocked);
-  if (blocked && trackedDomain === site.domain) {
-    blockTab(trackedDomain, blocked);
-  }
+  if (blocked) blockTab(trackedDomain, blocked);
 }
 
 async function startTracking(domain) {
@@ -278,14 +383,11 @@ async function startTracking(domain) {
   trackedDomain = domain;
 
   const sec = usage[domain] || 0;
-  const site = findSite(domain);
-  if (site) {
-    const results = await evalLimits(site, domain);
-    browser.browserAction.setBadgeText({ text: badgeText(sec) });
-    browser.browserAction.setBadgeBackgroundColor({
-      color: badgeColor(tightestProgress(results)),
-    });
-  }
+  const results = await evalDomainRules(domain);
+  browser.browserAction.setBadgeText({ text: badgeText(sec) });
+  browser.browserAction.setBadgeBackgroundColor({
+    color: badgeColor(tightestProgress(results)),
+  });
 
   ticker = setInterval(tick, 1000);
 }
@@ -310,8 +412,12 @@ function blockTab(domain, result) {
   const p = new URLSearchParams({
     domain,
     type: result.type,
+    policyId: result.policyId,
+    ruleId: result.ruleId,
+    policyName: result.policyName || '',
     spent: String(Math.floor(result.current)),
-    limit: String(Math.floor(result.limit)),
+    capacity: String(Math.floor(result.limit)),
+    domains: result.domains.join(','),
   });
   browser.tabs.update(tabId, {
     url: browser.runtime.getURL('blocked/main.html?' + p),
@@ -332,20 +438,20 @@ async function evaluate(tabId) {
     }
 
     const host = hostname(tab.url);
-    const site = findSite(host);
-    if (!site) {
+    const matched = matchTrackedDomain(host);
+    if (!matched) {
       stopTracking();
       return;
     }
 
-    const results = await evalLimits(site, site.domain);
+    const results = await evalDomainRules(matched);
     const blocked = results.find((r) => r.blocked);
     if (blocked) {
-      blockTab(site.domain, blocked);
+      blockTab(matched, blocked);
       return;
     }
 
-    await startTracking(site.domain);
+    await startTracking(matched);
   } catch {
     stopTracking();
   }
@@ -372,8 +478,8 @@ browser.windows.onFocusChanged.addListener((wid) => {
 });
 
 browser.storage.onChanged.addListener((changes) => {
-  if (changes.sites) {
-    sites = changes.sites.newValue || [];
+  if (changes.policies) {
+    policies = changes.policies.newValue || [];
     pruneBuckets();
     if (activeTabId) evaluate(activeTabId);
   }
@@ -392,12 +498,12 @@ browser.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 
   if (msg.type === 'extendTime') {
-    const site = findSite(msg.domain);
-    if (!site || !site.limits.some((l) => l.type === 'daily')) {
+    const found = findRule(msg.ruleId);
+    if (!found || found.rule.type !== 'daily') {
       sendResponse({ success: false });
       return false;
     }
-    const key = `ext_${dateKey}_${msg.domain}`;
+    const key = `ext_${dateKey}_${found.rule.id}`;
     browser.storage.local.get(key).then((data) => {
       const count = data[key] || 0;
       if (count >= MAX_EXTENSIONS) {
@@ -413,11 +519,19 @@ browser.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 });
 
 async function evalStatusAll() {
+  const domains = Array.from(trackedDomainsSet());
   const evals = {};
-  for (const site of sites) {
-    evals[site.domain] = await evalLimits(site, site.domain);
+  for (const d of domains) {
+    evals[d] = await evalDomainRules(d);
   }
-  return { sites, usage, dateKey, evals };
+  const ruleEvals = {};
+  for (const p of policies) {
+    for (const r of p.rules) {
+      const e = await evalRule(p, r);
+      if (e) ruleEvals[r.id] = e;
+    }
+  }
+  return { domains, policies, usage, dateKey, evals, ruleEvals };
 }
 
 /***************

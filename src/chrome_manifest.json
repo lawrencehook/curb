@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Curb",
   "version": "0.2.0",
-  "description": "Set daily time limits for distracting websites",
+  "description": "Set time limits for distracting websites",
   "permissions": [
     "tabs",
     "storage"

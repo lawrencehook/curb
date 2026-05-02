@@ -6,6 +6,7 @@
     <title>Edit — Curb</title>
     <link rel="stylesheet" type="text/css" href="main.css">
     <script defer src="/shared/utils.js"></script>
+    <script defer src="/shared/sync.js"></script>
     <script defer src="main.js"></script>
   </head>
   <body>
@@ -143,14 +144,45 @@
               <button id="import-btn" class="btn btn-primary">Choose file…</button>
             </section>
 
-            <section class="card coming-soon">
+            <section class="card" id="sync-card">
               <div class="section-head">
                 <h2>Sync</h2>
-                <span class="badge">coming soon</span>
+                <span class="badge" id="sync-status-badge">Signed out</span>
               </div>
-              <ul class="gate-placeholder">
-                <li>Sign in to sync policies across devices</li>
-              </ul>
+
+              <div id="sync-step-email">
+                <p class="hint">Sign in to sync your policies across devices. We'll email you a one-time code.</p>
+                <div class="sync-form">
+                  <input id="sync-email-input" type="email" placeholder="you@example.com" autocomplete="email" spellcheck="false">
+                  <button id="sync-send-code-btn" class="btn btn-primary">Send code</button>
+                </div>
+              </div>
+
+              <div id="sync-step-code" class="hidden">
+                <p class="hint">Enter the 6-digit code we sent to <strong id="sync-code-recipient"></strong>.</p>
+                <div class="sync-form">
+                  <input id="sync-code-input" type="text" inputmode="numeric" maxlength="6" placeholder="000000" autocomplete="one-time-code">
+                  <button id="sync-verify-btn" class="btn btn-primary">Verify</button>
+                </div>
+                <p class="hint sync-secondary-actions">
+                  <a href="#" id="sync-cancel-link">Use a different email</a>
+                  <span class="sep">·</span>
+                  <a href="#" id="sync-resend-link">Resend code</a>
+                </p>
+              </div>
+
+              <div id="sync-step-signed-in" class="hidden">
+                <div class="sync-info">
+                  <div>Signed in as <strong id="sync-account-email"></strong></div>
+                  <div class="sync-meta" id="sync-last-meta">Never synced.</div>
+                </div>
+                <div class="sync-actions">
+                  <button id="sync-now-btn" class="btn btn-primary">Sync now</button>
+                  <button id="sync-out-btn" class="btn btn-ghost">Sign out</button>
+                </div>
+              </div>
+
+              <div id="sync-error" class="sync-error hidden"></div>
             </section>
           </div>
 

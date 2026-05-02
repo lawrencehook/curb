@@ -346,15 +346,24 @@ function tightestProgress(results) {
  * Tracking
  ***************/
 
-async function tick() {
-  if (!trackedDomain) return;
-
-  // Day rollover
+// Day rollover. Runs anywhere we're about to read or mutate `usage`,
+// since `tick` (the only previous caller) doesn't fire when no site is tracked —
+// so a Firefox-MV2 background that survives midnight idle would keep yesterday's
+// usage in memory and re-block on first visit the next day.
+function checkDayRollover() {
   const now = getDateKey();
   if (now !== dateKey) {
     dateKey = now;
     usage = {};
+    return true;
   }
+  return false;
+}
+
+async function tick() {
+  if (!trackedDomain) return;
+
+  checkDayRollover();
 
   usage[trackedDomain] = (usage[trackedDomain] || 0) + 1;
   dirty = true;
@@ -430,6 +439,7 @@ function blockTab(domain, result) {
 
 async function evaluate(tabId) {
   activeTabId = tabId;
+  checkDayRollover();
   try {
     const tab = await browser.tabs.get(tabId);
     if (!tab.url || tab.url.startsWith(browser.runtime.getURL(''))) {
@@ -486,6 +496,7 @@ browser.storage.onChanged.addListener((changes) => {
 });
 
 setInterval(flush, FLUSH_INTERVAL);
+setInterval(checkDayRollover, 60_000);
 
 /***************
  * Message handling
@@ -519,6 +530,7 @@ browser.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 });
 
 async function evalStatusAll() {
+  checkDayRollover();
   const domains = Array.from(trackedDomainsSet());
   const evals = {};
   for (const d of domains) {

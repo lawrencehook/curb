@@ -7,6 +7,7 @@ const EXPORT_FORMAT = 'curb-export-v1';
 
 let policies = [];
 let ruleEvals = {};
+let todayUsage = {};
 let statusTimer = null;
 
 /***************
@@ -19,6 +20,7 @@ async function load() {
 
   renderSidebar();
   resolveView();
+  if (targetView === 'settings') renderSync();
   pollStatus();
   if (statusTimer) clearInterval(statusTimer);
   statusTimer = setInterval(pollStatus, 1000);
@@ -33,6 +35,7 @@ async function pollStatus() {
     const status = await browser.runtime.sendMessage({ type: 'getStatus' });
     if (!status) return;
     ruleEvals = status.ruleEvals || {};
+    todayUsage = status.usage || {};
     updateStatus();
   } catch {}
 }
@@ -442,10 +445,12 @@ function renderPolicyDomains(p) {
     const row = document.createElement('label');
     row.className = 'domain-row' + (disabledReason ? ' disabled' : '');
     row.htmlFor = id;
+    row.dataset.domain = d;
     row.innerHTML = `
       <input type="checkbox" id="${id}" ${checked ? 'checked' : ''} ${disabledReason ? 'disabled' : ''}>
       <span class="domain-name">${esc(d)}</span>
       ${disabledReason ? `<span class="domain-note">${esc(disabledReason)}</span>` : ''}
+      ${checked ? `<span class="domain-time">—</span>` : ''}
     `;
     const cb = qs('input', row);
     cb.addEventListener('change', async () => {
@@ -532,6 +537,13 @@ function updateStatus() {
   for (const row of qsa('#rules-list .limit-row')) {
     const id = row.dataset.ruleId;
     applyStatus(qs('.status-fill', row), qs('.status-text', row), ruleEvals[id]);
+  }
+  // Policy view: per-domain time spent today
+  for (const row of qsa('#policy-domains .domain-row')) {
+    const t = qs('.domain-time', row);
+    if (!t) continue;
+    const sec = todayUsage[row.dataset.domain] || 0;
+    t.textContent = `${fmtDuration(sec)} today`;
   }
 }
 
@@ -920,6 +932,178 @@ qs('#import-file').addEventListener('change', (e) => {
   if (file) importPoliciesFromFile(file);
   e.target.value = '';
 });
+
+/***************
+ * Sync UI
+ ***************/
+
+let syncCodeEmail = '';
+
+function showSyncStep(name) {
+  qs('#sync-step-email').classList.toggle('hidden', name !== 'email');
+  qs('#sync-step-code').classList.toggle('hidden', name !== 'code');
+  qs('#sync-step-signed-in').classList.toggle('hidden', name !== 'in');
+}
+
+function showSyncError(message) {
+  const el = qs('#sync-error');
+  if (!message) {
+    el.textContent = '';
+    el.classList.add('hidden');
+    return;
+  }
+  el.textContent = message;
+  el.classList.remove('hidden');
+}
+
+function relativeTimeAgo(ts) {
+  if (!ts) return null;
+  const ms = Date.now() - ts;
+  if (ms < 5_000) return 'just now';
+  if (ms < 60_000) return `${Math.floor(ms / 1000)}s ago`;
+  if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m ago`;
+  if (ms < 86_400_000) return `${Math.floor(ms / 3_600_000)}h ago`;
+  return `${Math.floor(ms / 86_400_000)}d ago`;
+}
+
+async function renderSync() {
+  showSyncError('');
+  const session = await getSession();
+  const badge = qs('#sync-status-badge');
+
+  if (!session) {
+    badge.textContent = 'Signed out';
+    showSyncStep('email');
+    return;
+  }
+
+  badge.textContent = 'Signed in';
+  qs('#sync-account-email').textContent = session.email;
+  showSyncStep('in');
+
+  const state = await getSyncState();
+  const lastMeta = qs('#sync-last-meta');
+  if (state.lastError) {
+    lastMeta.textContent = state.lastError;
+  } else if (state.lastSyncedAt) {
+    lastMeta.textContent = `Last synced ${relativeTimeAgo(state.lastSyncedAt)} · v${state.version}`;
+  } else {
+    lastMeta.textContent = 'Never synced.';
+  }
+}
+
+async function handleSendCode() {
+  showSyncError('');
+  const email = qs('#sync-email-input').value.trim();
+  if (!email) return;
+  const btn = qs('#sync-send-code-btn');
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+  try {
+    await requestCode(email);
+    syncCodeEmail = email;
+    qs('#sync-code-recipient').textContent = email;
+    qs('#sync-code-input').value = '';
+    showSyncStep('code');
+    setTimeout(() => qs('#sync-code-input').focus(), 0);
+  } catch (err) {
+    showSyncError(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Send code';
+  }
+}
+
+async function handleVerify() {
+  showSyncError('');
+  const code = qs('#sync-code-input').value.trim();
+  if (!code || !syncCodeEmail) return;
+  const btn = qs('#sync-verify-btn');
+  btn.disabled = true;
+  btn.textContent = 'Verifying…';
+  try {
+    await verifyCode(syncCodeEmail, code);
+    syncCodeEmail = '';
+    qs('#sync-email-input').value = '';
+    qs('#sync-code-input').value = '';
+    await renderSync();
+    // Auto-pull on first sign-in.
+    try {
+      await syncNow();
+    } catch (err) {
+      showSyncError('Signed in, but initial sync failed: ' + err.message);
+    }
+    await renderSync();
+    // Refresh policies UI in case sync pulled new data.
+    const data = await browser.storage.local.get('policies');
+    policies = data.policies || [];
+    renderSidebar();
+  } catch (err) {
+    showSyncError(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Verify';
+  }
+}
+
+async function handleSyncNow() {
+  showSyncError('');
+  const btn = qs('#sync-now-btn');
+  btn.disabled = true;
+  btn.textContent = 'Syncing…';
+  try {
+    const result = await syncNow();
+    if (result.status === 'pulled' || result.status === 'conflict') {
+      const data = await browser.storage.local.get('policies');
+      policies = data.policies || [];
+      renderSidebar();
+    }
+    await renderSync();
+  } catch (err) {
+    showSyncError(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Sync now';
+  }
+}
+
+async function handleSignOut() {
+  const ok = await confirmModal({
+    title: 'Sign out?',
+    message: 'Local policies stay on this device. Sync stops until you sign in again.',
+    okLabel: 'Sign out',
+  });
+  if (!ok) return;
+  await signOut();
+  await renderSync();
+}
+
+qs('#sync-send-code-btn').addEventListener('click', handleSendCode);
+qs('#sync-email-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') handleSendCode();
+});
+qs('#sync-verify-btn').addEventListener('click', handleVerify);
+qs('#sync-code-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') handleVerify();
+});
+qs('#sync-cancel-link').addEventListener('click', (e) => {
+  e.preventDefault();
+  syncCodeEmail = '';
+  showSyncError('');
+  showSyncStep('email');
+});
+qs('#sync-resend-link').addEventListener('click', async (e) => {
+  e.preventDefault();
+  if (!syncCodeEmail) return;
+  showSyncError('');
+  try {
+    await requestCode(syncCodeEmail);
+  } catch (err) {
+    showSyncError(err.message);
+  }
+});
+qs('#sync-now-btn').addEventListener('click', handleSyncNow);
+qs('#sync-out-btn').addEventListener('click', handleSignOut);
 
 window.addEventListener('unload', () => {
   if (statusTimer) clearInterval(statusTimer);

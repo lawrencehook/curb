@@ -2,12 +2,16 @@
 
 Browser extension that sets daily caps and leaky-bucket rate limits on distracting sites. Firefox (MV2) and Chrome (MV3).
 
-## Local testing (Firefox)
+## Local testing
+
+`./dev.sh <firefox|chrome>` builds `dist/<browser>/` as a tree of symlinks back into `src/` with the right manifest copied in, so both browsers can run side-by-side without clobbering each other's `manifest.json`. Edits in `src/` propagate live through the symlinks.
 
 ```bash
-# Load src/ in a temporary Firefox profile with live reload
-cd src && cp firefox_manifest.json manifest.json && web-ext run
+./dev.sh firefox     # symlinks + launches web-ext run
+./dev.sh chrome      # symlinks; load dist/chrome/ as unpacked in chrome://extensions
 ```
+
+Re-run after editing a manifest variant; other source edits don't need a re-run.
 
 ## Release
 

@@ -6,6 +6,7 @@
 //   sync_state:   { last_synced_at?, last_error? } — informational metadata
 
 // Production sync server. For local development, swap to 'http://localhost:3000'.
+// const SERVER_URL = 'http://localhost:3000';
 const SERVER_URL = 'https://server.lawrencehook.com/curb';
 
 /***************

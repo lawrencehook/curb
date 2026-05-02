@@ -123,6 +123,15 @@ cd ~/github
 git clone git@github.com:lawrencehook/curb.git
 ```
 
+### Confirm S3 access
+
+Sync documents live at `s3://curb-extension/<email>/policies.json` (the per-email folder leaves room for `usage.json`, `settings.json`, etc. later). Confirm the IAM user behind the AWS creds has these permissions on the bucket:
+
+```
+s3:GetObject     arn:aws:s3:::curb-extension/*
+s3:PutObject     arn:aws:s3:::curb-extension/*
+```
+
 ### Create the server `.env`
 
 ```bash
@@ -135,13 +144,12 @@ AWS_REGION=us-east-1
 AWS_ACCESS_KEY_ID=<reuse RYS creds>
 AWS_SECRET_ACCESS_KEY=<reuse RYS creds>
 EMAIL_FROM=curb_noreply@lawrencehook.com
-DATA_DIR=/home/ec2-user/curb-data
+S3_BUCKET=curb-extension
 EOF
 chmod 600 .env
-mkdir -p /home/ec2-user/curb-data
 ```
 
-`DATA_DIR` lives outside the git checkout on purpose — `git checkout -- .` in the deploy script would otherwise clobber `storage.db` if it sat under `server/data/`.
+(`storage.db` defaults to `server/data/storage.db` and gets clobbered on every deploy. That's fine — it only holds login codes and rate-limit counters, both of which rebuild themselves within minutes.)
 
 ### Apply the nginx update
 
@@ -192,10 +200,6 @@ No nginx changes needed unless you alter routing.
 
 ## 5. Backups
 
-`storage.db` is the only stateful file. To snapshot:
+Sync documents live in `s3://curb-extension/`. Enable [S3 versioning](https://docs.aws.amazon.com/AmazonS3/latest/userguide/Versioning.html) on the bucket if you want history; AWS handles durability from there.
 
-```bash
-sqlite3 /home/ec2-user/curb-data/storage.db ".backup /home/ec2-user/curb-data/backup-$(date +%F).db"
-```
-
-Throw a cron job at it nightly + rsync the result to S3 once usage warrants. SQLite WAL mode plays nicely with `.backup`.
+`storage.db` holds only ephemeral state (login codes + rate limits) and rebuilds on first request — no backups needed.

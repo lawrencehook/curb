@@ -41,7 +41,11 @@ app.use(cors({
 
 app.use(express.json({ limit: '256kb' }));
 
-app.use(morgan(':method :url :status :response-time ms', {
+// Email is set by requireAuth (from JWT) for authed routes,
+// or read from the body on unauth routes like /auth/request-code.
+morgan.token('email', (req) => req.userEmail || (req.body && req.body.email) || '-');
+
+app.use(morgan(':method :url :status :response-time ms email=:email', {
   stream: { write: msg => console.log(msg.trimEnd()) },
 }));
 

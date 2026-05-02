@@ -3,8 +3,10 @@ const config = require('../config');
 
 const client = new S3Client({ region: config.AWS_REGION });
 
+// Keys land at s3://<bucket>/<email>/policies.json. The per-email folder
+// leaves room for sibling docs (usage, settings, etc.) without restructuring.
 function key(email) {
-  return `${config.S3_PREFIX}/${email.toLowerCase()}.json`;
+  return `${email.toLowerCase()}/policies.json`;
 }
 
 // Returns { policies, version, updated_at, etag } or null if the object doesn't exist.

@@ -26,7 +26,6 @@ module.exports = {
 
   // AWS S3 (sync documents)
   get S3_BUCKET() { return process.env.S3_BUCKET; },
-  get S3_PREFIX() { return process.env.S3_PREFIX || 'curb'; },
 
   // File paths
   get DATA_DIR() { return process.env.DATA_DIR || './data'; },

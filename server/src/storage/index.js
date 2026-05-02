@@ -223,7 +223,6 @@ module.exports = {
   // Setup
   ensureDirectories,
   closeDatabase,
-  getDb,
 
   // Login codes
   createLoginCode,

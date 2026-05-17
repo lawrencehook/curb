@@ -8,4 +8,5 @@
 - **New primary color** — move away from purple. Picks a palette that works across popup, edit page, blocked page, and overlay.
 - **UI refinement pass** — iterate on buttons, spacing, info density across the whole surface.
 - **Refresh store screenshots** — the ones in `screenshots/` predate the popup redesign, edit page tabs, schedule card, and blocked-page rewrite.
+- **Optional host permissions for the overlay** — drop `content_scripts: ["<all_urls>"]`; switch to `optional_host_permissions` + `chrome.permissions.request({ origins: ['*://*.domain/*', ...] })` at policy-domain-add time and `chrome.scripting.registerContentScripts` once granted. Removes the broad-host-permissions flag at Chrome Web Store review.
 - **Session-based tracking** — replace the 1-Hz `tick()` in `background/main.js` with `(activeSince, domain)` accounting committed on focus/tab change, plus a precomputed `setTimeout(blockTab, remainingSec * 1000)`; cuts storage writes and `evalRule` calls ~60× and makes blocks land at the millisecond.
